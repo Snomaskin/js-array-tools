@@ -1,72 +1,72 @@
 /**
- * @param {Array<{name: string, age: number, sex: string}>} arr 
- * @param {'byAge'|'byName'} how
- */
-function sortArr(arr, how = 'byAge'){
-    if (how === 'byAge'){
-        arr.sort((a, b) => {
-            let sexCompare = a.sex.localeCompare(b.sex);
-            if (sexCompare !== 0) return sexCompare;
-
-            let ageCompare = a.age - b.age;
-            if (ageCompare !== 0) return ageCompare;
-
-            return a.name.localeCompare(b.name, 'sv');
-        })
-    }
-    if (how === 'byName'){
-        arr.sort((a, b) =>{
-            let sexCompare = a.sex.localeCompare(b.sex);
-            if (sexCompare !== 0) return sexCompare;
-
-            let nameCompare = a.name.localeCompare(b.name, 'sv');
-            if (nameCompare !== 0) return nameCompare;
-
-            return a.age - b.age;
-        })
-    }
-}
-
-/**
  * 
- * @param {Array<{name: string, age: number, sex: string}>} arr 
- * @param {string} name 
- * @param {int} [age] 
- * @param {string} [sex] 
+ * @param {Array<{}>} arr 
+ * @param {Array<{ field: string, direction?: string }>} fields // Sorting hierarchy: {field1: color} -> {field2: shape} etc.
+ * @param {{ locale?: string }} options 
+ * @param {(a: any, b: any, options: Object) => number} compareFn
+ * @returns {Array<{}>} // Sorted array
  */
-function addName(arr, name, age, sex){
-    if (arr.find(i => {
-        return i.name === name && 
-        i.age === age && 
-        i.sex === sex;
-    })){
-        console.log('Name already exists');
-    } else {
-        insertSorted(arr, name, age, sex)
-    }
+function customSort(arr, fields, options = { locale: 'en' }, compareFn){
+    return [...arr].sort((a, b) => {
+        for (const {field, direction = 'asc'} of fields){
+            const compareResult = compareFn(a[field], b[field], options)
+            if (compareResult !== 0){
+                return direction === 'asc' ? compareResult: -compareResult;
+            }
+        }
+        return 0;
+    });
 }
 
-function insertSorted(arr, name, age, sex){
-    const index = arr.findIndex(i => 
-        i.sex > sex || 
-        (i.sex === sex && i.age > age) || 
-        (i.sex === sex && i.age === age && i.name > name)
-    );
-    console.log(index)
-
-    arr.splice(index, 0, {name: name, age: age, sex: sex})
+function compareValues(a, b, options) {
+    if (typeof a === 'string' && typeof b === 'string'){
+        return a.localeCompare(b, options.locale);
+    }
+    return a - b;
 }
 
 /**
- * @param {Array<{name: string, age: number, sex: string}>} arr
- * @param {string} name 
- * @returns {{name: string, age: number, sex: string}}
+ * @param {Array<{}>} arr 
+ * @param {{}} entryDetails 
+ * @param {(arr: Array<{}>, entryDetails: {}) => boolean} lookupFn
+ * @param {(arr: Array<{}>, entryDetails: {}) => number} compareFn 
  */
-const lookup = (arr, name) => arr.find(i => i.name === name);
+
+function addEntry(arr, entryDetails, lookupFn, compareFn){
+    if (lookupFn(arr, entryDetails)){
+        console.log(`Entry: ${JSON.stringify(entryDetails)} already exists`);
+    } else {
+        const insertIndex = compareFn(arr, entryDetails);
+        arr.splice(insertIndex, 0, entryDetails);
+    }
+}
+/**
+ * @param {Array<{}>} arr 
+ * @param {{}} entryDetails 
+ * @param {string} name
+ */
+const peoplesFns = {
+    peopleCompare(arr, entryDetails) {
+        return arr.findIndex(i => 
+            i.sex > entryDetails.sex || 
+            (i.sex === entryDetails.sex && i.age > entryDetails.age) || 
+            (i.sex === entryDetails.sex && i.age === entryDetails.age && i.name > entryDetails.name)
+            );
+    },
+
+    peopleLookup(arr, entryDetails) {
+        return arr.find(i => {
+            return i.name === entryDetails.name && 
+            i.age === entryDetails.age && 
+            i.sex === entryDetails.sex;
+            });
+    }
+}
 
 
 
-const arr = [
+
+const people = [
     {name: 'Fred', age: 23, sex: 'M'},
     {name: 'Ola', age: 23, sex: 'M'},
     {name: 'Sara', age: 30, sex: 'F'},
@@ -76,8 +76,17 @@ const arr = [
     {name: 'Åsa', age: 44, sex: 'F'},
 ]
 
-sortArr(arr, 'byName')
-addName(arr, 'Ola', 23, 'M')
-console.table(arr)
+const sortedPeople = customSort(people, [
+    { field: 'sex' },
+    { field: 'age' },
+    { field: 'name', direction: 'asc' }
+  ], { locale: 'sv' }, compareValues);
 
-lookup(arr, 'Ola')
+
+const entryDetails = {name:'Ola', age: 23, sex: 'M'}
+addEntry(sortedPeople,
+        entryDetails,
+        peoplesFns.lookupPeople,
+        peoplesFns.peopleCompare);
+console.table(people);
+console.table(sortedPeople)
