@@ -1,15 +1,17 @@
 /**
- * 
- * @param {Array<{}>} arr 
- * @param {Array<{ field: string, direction?: string }>} fields // Sorting hierarchy: {field1: color} -> {field2: shape} etc.
- * @param {{ locale?: string }} options 
- * @param {(a: any, b: any, options: Object) => number} compareFn
- * @returns {Array<{}>} // Sorted array
+ * Sorts an array of objects based on multiple fields with custom sorting logic
+ * @param {Array<Object>} arr - Input array of objects to sort
+ * @param {Array<{field: string, direction?: 'asc'|'dsc'}>} fields - Sorting criteria. Default: 'asc'
+ * @param {{locale?: string}} options - Language setting for sorting
+ * @returns {Array<Object>} - New sorted array
  */
-function customSort(arr, fields, options = { locale: 'en' }, compareFn){
+function customSort(arr, fields, options = { locale: 'en' }) {
     return [...arr].sort((a, b) => {
-        for (const {field, direction = 'asc'} of fields){
-            const compareResult = compareFn(a[field], b[field], options)
+        for (const {field, direction = 'asc'} of fields) {
+            const compareResult = typeof a[field] === 'string'
+                ? a[field].localeCompare(b[field], options.locale)
+                : a[field] - b[field];
+
             if (compareResult !== 0){
                 return direction === 'asc' ? compareResult: -compareResult;
             }
@@ -18,54 +20,70 @@ function customSort(arr, fields, options = { locale: 'en' }, compareFn){
     });
 }
 
-function compareValues(a, b, options) {
-    if (typeof a === 'string' && typeof b === 'string'){
-        return a.localeCompare(b, options.locale);
-    }
-    return a - b;
-}
-
 /**
  * @param {Array<{}>} arr 
- * @param {{}} entryDetails 
- * @param {(arr: Array<{}>, entryDetails: {}) => boolean} lookupFn
- * @param {(arr: Array<{}>, entryDetails: {}) => number} compareFn 
+ * @param {Array<{field: string, direction?: 'asc'|'dsc'}>} sortOrder Default: 'asc'
+ * @param {Object} entryDetails 
  */
-
-function addEntry(arr, entryDetails, lookupFn, compareFn){
-    if (lookupFn(arr, entryDetails)){
+function addEntry(arr, sortOrder, entryDetails){
+    if (lookupFns.lookupEntry(arr, entryDetails)){
         console.log(`Entry: ${JSON.stringify(entryDetails)} already exists`);
     } else {
-        const insertIndex = compareFn(arr, entryDetails);
+        const insertIndex = newEntryIndex(arr, sortOrder, entryDetails);
         arr.splice(insertIndex, 0, entryDetails);
     }
 }
+
 /**
  * @param {Array<{}>} arr 
- * @param {{}} entryDetails 
- * @param {string} name
+ * @param {Array<{field: string, direction?: 'asc'|'dsc'}>} sortOrder Default: 'asc'
+ * @param {Object} entryDetails 
+ * @returns {number} - Index where the new entry should be inserted
  */
-const peoplesFns = {
-    peopleCompare(arr, entryDetails) {
-        return arr.findIndex(i => 
-            i.sex > entryDetails.sex || 
-            (i.sex === entryDetails.sex && i.age > entryDetails.age) || 
-            (i.sex === entryDetails.sex && i.age === entryDetails.age && i.name > entryDetails.name)
-            );
+function newEntryIndex(arr, sortOrder, entryDetails) {
+    for (let i = 0; i < arr.length; i++) {
+        const current = arr[i];
+        for (const {field, direction = 'asc'} of sortOrder) {
+            const isDescending = direction === 'dsc';
+            const comparison = isDescending
+            ? current[field] < entryDetails[field]
+            : current[field] > entryDetails[field];
+
+            if (comparison) {
+                return i;
+            }
+            else if (current[field] !== entryDetails[field]) {
+                break;
+            }
+        }
+    }
+    return arr.length;
+}
+
+/**
+ * Collection of lookup functions for array operations
+ * @type {{
+*   lookupEntry: (arr: Array<Object>, entryDetails: Object) => Object|undefined,
+*   filterBy: (arr: Array<Object>, criteria: Object) => Array<Object>
+* }}
+*/
+const lookupFns = {
+    lookupEntry(arr, entryDetails) {
+        return arr.find(i => {
+            return Object.entries(entryDetails).every(([key, value]) => i[key] === value);
+        });
     },
 
-    peopleLookup(arr, entryDetails) {
-        return arr.find(i => {
-            return i.name === entryDetails.name && 
-            i.age === entryDetails.age && 
-            i.sex === entryDetails.sex;
-            });
+    filterBy(arr, criteria) {
+        return arr.filter(i => {
+            return Object.entries(criteria).every(([key, value]) => i[key] === value);
+        });
     }
+    
 }
 
 
-
-
+ //Example use:
 const people = [
     {name: 'Fred', age: 23, sex: 'M'},
     {name: 'Ola', age: 23, sex: 'M'},
@@ -74,19 +92,22 @@ const people = [
     {name: 'Gregor', age: 45, sex: 'M'},
     {name: 'Janek', age: 14, sex: 'M'},
     {name: 'Åsa', age: 44, sex: 'F'},
-]
+];
 
-const sortedPeople = customSort(people, [
+const sortOrder = [
     { field: 'sex' },
-    { field: 'age' },
+    { field: 'age' , direction: 'dsc' },
     { field: 'name', direction: 'asc' }
-  ], { locale: 'sv' }, compareValues);
+];
+
+const sortedPeople = customSort(people, sortOrder, { locale: 'sv' }, valuesCompare);
 
 
-const entryDetails = {name:'Ola', age: 23, sex: 'M'}
-addEntry(sortedPeople,
-        entryDetails,
-        peoplesFns.lookupPeople,
-        peoplesFns.peopleCompare);
-console.table(people);
-console.table(sortedPeople)
+const entryDetails = {name:'Ola', age: 24, sex: 'M'}
+addEntry(sortedPeople, sortOrder, entryDetails);
+
+const olas = lookupFns.filterBy(sortedPeople, {name: 'Ola'});
+const women = lookupFns.filterBy(sortedPeople, {sex: 'F'});
+console.table(sortedPeople);
+console.table(olas);
+console.table(men);
